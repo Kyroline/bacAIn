@@ -17,15 +17,18 @@ import android.graphics.Bitmap;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.CountDownTimer;
+import android.os.Handler;
 import android.speech.RecognizerIntent;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.view.inputmethod.InputMethodManager;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
@@ -50,11 +53,15 @@ public class MainActivity extends AppCompatActivity {
     private float mAccelCurrent;
     private float mAccelLast;
     WebView webView;
+    String text = "Custom wee woo wee woo";
     ProgressBar progressBar;
     ProgressDialog progressDialog;
     private ActivityResultLauncher<Intent> someActivityResultLauncher;
     Intent data;
     TextToSpeech textToSpeech;
+    Handler handler = new Handler();
+    final int delay = 5000; // 1000 milliseconds == 1 second
+    Runnable runnable;
 
     int paragraphCount;
     public String USER_AGENT = "(Android " + Build.VERSION.RELEASE + ") Chrome/110.0.5481.63 Mobile";
@@ -142,6 +149,8 @@ public class MainActivity extends AppCompatActivity {
                 super.onProgressChanged(view, newProgress);
             }
         });
+
+        webView.setVisibility(View.GONE);
     }
 
     private final SensorEventListener mSensorListener = new SensorEventListener() {
@@ -252,9 +261,6 @@ public class MainActivity extends AppCompatActivity {
 
     private void onMicPressed() {
         // Menampilkan speech recognizer untuk mendapatkan pertanyaan
-        webView.evaluateJavascript("(function() { " +
-                "document.getElementById('prompt-textarea').click(); " +
-                "})();", null);
         Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, new Locale("id", "ID"));
@@ -303,9 +309,56 @@ public class MainActivity extends AppCompatActivity {
         public void onPageFinished(WebView view, String url) {
             super.onPageFinished(view, url);
             progressBar.setVisibility(View.GONE);
-            webView.setVisibility(View.VISIBLE);
+            webView.setVisibility(View.GONE);
             webView.requestFocus();
 
+        }
+    }
+
+    public void checkEnd() {
+        handler.postDelayed(runnable = new Runnable() {
+            public void run() {
+                Log.d("REPEATER", "START");
+                webView.post(() -> webView.evaluateJavascript(
+                        "var paragraphs = document.getElementsByTagName('p');"
+                                + "var combinedText='';"
+                                + "for (var i =" + paragraphCount + "-1; i < paragraphs.length; i++) {"
+                                + "combinedText+= paragraphs[i].textContent;"
+                                + " }combinedText;", new ValueCallback<String>() {
+                            @Override
+                            public void onReceiveValue(String value) {
+                                String paragraphString = value;
+                                text = value;
+                                Log.d("REPEATER", value);
+                                if (paragraphString == text) {
+                                    speak(paragraphString);
+                                    handler.removeCallbacks(runnable);
+                                }
+                            }
+                        }));
+                handler.postDelayed(runnable, delay);
+            }
+        }, delay);
+    }
+
+    private void speak(String paragraph) {
+        String paragraphLength;
+        Toast.makeText(MainActivity.this, "Membacakan", Toast.LENGTH_SHORT);
+        try {
+            String utteranceId = UUID.randomUUID().toString();
+            textToSpeech.speak(paragraph, TextToSpeech.QUEUE_FLUSH, null, utteranceId);
+
+            paragraphLength = "(function() { return document.getElementsByTagName('p').length; })();";
+            webView.evaluateJavascript(paragraphLength, new ValueCallback<String>() {
+                @Override
+                public void onReceiveValue(String value) {
+                    paragraphCount = Integer.parseInt(value);
+                }
+            });
+
+
+        } catch (Exception e) {
+            Toast.makeText(MainActivity.this, "" + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -314,74 +367,81 @@ public class MainActivity extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, data);
         try {
             String str = data.getStringArrayListExtra("android.speech.extra.RESULTS").get(0);
-            //memasukkan hasil speech recognition ke textarea
-            StringBuilder stringBuilder = new StringBuilder();
-            stringBuilder.append("(function() { var d = document.getElementsByTagName('textarea').length;");
-            stringBuilder.append("document.getElementsByTagName('textarea')[d-1].value='");
-            stringBuilder.append(str);
-            stringBuilder.append("';document.querySelector('button.absolute').disabled = false;");
-            stringBuilder.append("})();");
-            webView.evaluateJavascript(stringBuilder.toString(), null);
-            //melakukan manipulasi perubahan pada textarea menggunakan keyboard agar button bisa terupdate
-            new CountDownTimer(1000, 1000) {
-                public void onFinish() {
-                    webView.setVisibility(View.VISIBLE);
-                    long downTime = 900;
-                    long eventTime = 1000;
-                    int metaState = 0;
-                    MotionEvent me = MotionEvent.obtain(
-                            downTime,
-                            eventTime,
-                            MotionEvent.ACTION_DOWN,
-                            100,
-                            1700,
-                            metaState
-                    );
-                    webView.dispatchTouchEvent(me);
-                    me = MotionEvent.obtain(
-                            downTime,
-                            eventTime,
-                            MotionEvent.ACTION_UP,
-                            50,
-                            1700,
-                            metaState
-                    );
-                    webView.dispatchTouchEvent(me);
-                }
-                public void onTick(long millisUntilFinished) {}
-            }.start();
-            new CountDownTimer(2000, 1000) {
-                public void onFinish() {
-                    webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN,KeyEvent.KEYCODE_SPACE));
-                    webView.setVisibility(View.GONE);
-                }
-                public void onTick(long millisUntilFinished) {}
-            }.start();
-            new CountDownTimer(3000, 1000) {
-                public void onFinish() {
-                    webView.evaluateJavascript("(function() { document.querySelector('button.absolute').click();})();", null);
-                    new CountDownTimer(30000, 1000) {
-                        public void onFinish() {}
-                        public void onTick(long millisUntilFinished) {
-                            //untuk mendeteksi apakah chatgpt sudah selesai menyampaikan jawaban
-                            String paragraphLength = "(function() { return document.querySelector(\"" +
-                                    "[data-state=closed]\") })();";
-                            webView.evaluateJavascript(paragraphLength, new ValueCallback<String>() {
-                                @Override
-                                public void onReceiveValue(String value) {
-                                    if (value != "null") {
-                                        onSpeakerPressed();
-                                        cancel();
-                                    }
-                                }
-                            });
-                        }
-                    }.start();
-                }
-                public void onTick(long millisUntilFinished) {}
-            }.start();
+            if (str.toLowerCase() == "manual aplikasi") {
+                String utteranceId = UUID.randomUUID().toString();
+                textToSpeech.speak("Untuk memulai goyangkan ponsel dan tanyakan pertanyaan. ChatGPT akan " +
+                        "menjawab pertanyaan secara otomatis.", TextToSpeech.QUEUE_FLUSH, null, utteranceId);
+            } else {
+                //memasukkan hasil speech recognition ke textarea
+                StringBuilder stringBuilder = new StringBuilder();
+                stringBuilder.append("(function() { var d = document.getElementsByTagName('textarea').length;");
+                stringBuilder.append("document.getElementsByTagName('textarea')[d-1].value='");
+                stringBuilder.append(str);
+                stringBuilder.append("';document.querySelector('button.absolute').disabled = false;");
+                stringBuilder.append("})();");
+                webView.evaluateJavascript(stringBuilder.toString(), null);
+                //melakukan manipulasi perubahan pada textarea menggunakan keyboard agar button bisa terupdate
+                pressPrompt();
+            }
         } catch (Exception e) {
             Toast.makeText(MainActivity.this, "" + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
+    }
+    private void pressPrompt() {
+        new CountDownTimer(1000, 1000) {
+            public void onFinish() {
+                webView.setVisibility(View.VISIBLE);
+                long downTime = 900;
+                long eventTime = 1000;
+                int metaState = 0;
+                MotionEvent me = MotionEvent.obtain(
+                        downTime,
+                        eventTime,
+                        MotionEvent.ACTION_DOWN,
+                        100,
+                        1700,
+                        metaState
+                );
+                webView.dispatchTouchEvent(me);
+                me = MotionEvent.obtain(
+                        downTime,
+                        eventTime,
+                        MotionEvent.ACTION_UP,
+                        50,
+                        1700,
+                        metaState
+                );
+                webView.dispatchTouchEvent(me);
+                refreshButton();
+            }
+
+            public void onTick(long millisUntilFinished) {
+            }
+        }.start();
+    }
+    private void refreshButton() {
+        new CountDownTimer(1000, 1000) {
+            public void onFinish() {
+                webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE));
+                InputMethodManager imm = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
+                imm.hideSoftInputFromWindow(webView.getWindowToken(), 0);
+                webView.setVisibility(View.GONE);
+                pressButton();
+            }
+
+            public void onTick(long millisUntilFinished) {
+            }
+        }.start();
+    }
+    private void pressButton() {
+        new CountDownTimer(1000, 1000) {
+            public void onFinish() {
+                webView.evaluateJavascript("(function() { document.querySelector('button.absolute').click();})();", null);
+                checkEnd();
+            }
+
+            public void onTick(long millisUntilFinished) {
+            }
+        }.start();
     }
 }
