@@ -14,7 +14,6 @@ import android.net.http.SslError;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.app.ProgressDialog;
-import android.content.ActivityNotFoundException;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Bitmap;
@@ -25,7 +24,6 @@ import android.os.Handler;
 import android.speech.RecognizerIntent;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
-import android.util.Log;
 import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -63,21 +61,18 @@ public class MainActivity extends AppCompatActivity {
     public Vibrator v = null;
     public boolean visibleState = false;
     private boolean isIntentFinished = false;
-
     protected static  final int RESULT_SPEECH =1;
     WebView webView;
     String text = "..";
     ProgressBar progressBar;
     ProgressDialog progressDialog;
     private ActivityResultLauncher<Intent> someActivityResultLauncher;
-
     Intent data;
     TextToSpeech textToSpeech;
     Handler handler = new Handler();
     Handler closeHandler = new Handler();
     final int delay = 7000;
     Runnable runnable;
-
     int paragraphCount;
     public String USER_AGENT = "(Android " + Build.VERSION.RELEASE + ") Chrome/110.0.5481.63 Mobile";
 
@@ -102,7 +97,7 @@ public class MainActivity extends AppCompatActivity {
 
         progressDialog = new ProgressDialog(this);
         progressDialog.setMessage("Loading Please Wait...");
-        paragraphCount = 1;
+        paragraphCount = 0;
 
         WebSettings webSettings = webView.getSettings();
         webSettings.setJavaScriptEnabled(true);
@@ -191,7 +186,7 @@ public class MainActivity extends AppCompatActivity {
             mAccelCurrent = (float) Math.sqrt((double) (x * x + y * y + z * z));
             float delta = mAccelCurrent - mAccelLast;
             mAccel = mAccel * 0.9f + delta;
-            if (mAccel < -7) {
+            if (mAccel < -8) {
                 onMicPressed();
             }
         }
@@ -256,12 +251,29 @@ public class MainActivity extends AppCompatActivity {
         String allParagraph, paragraphLength;
 
         try {
-
-            allParagraph = "var paragraphs = document.getElementsByTagName('p');"
-                    + "var combinedText='';"
-                    + "for (var i =" + paragraphCount + "-1; i < paragraphs.length; i++) {"
-                    + "combinedText+= paragraphs[i].textContent;"
-                    + " }combinedText;";
+//            allParagraph = "var paragraphs = document.getElementsByTagName('p');"
+//                    + "var combinedText='';"
+//                    + "for (var i =" + paragraphCount + "-1; i < paragraphs.length; i++) {"
+//                    + "combinedText+= paragraphs[i].textContent;"
+//                    + " }combinedText;";
+            /*  PERUBAHAN  */
+            /*  Update sebelumnya kode diatas hanya mendeteksi jawaban berdasarkan tag p nya saja,
+            * kadang ada beberapa situasi dimana GPT memberikan list (ol) dengan dengan tag (li) tanpa
+            * diapit tag p, sehingga list ini tidak terbaca aplikasi. Solusi dari masalah ini ada bawah  */
+            allParagraph =
+                    "var x = document.getElementsByClassName('prose');"
+                    + "var y = x[" + paragraphCount + "].childNodes;"
+                    + "combinedText = '';"
+                    + "for (var i = 0; i < y.length; i++) {"
+                    + "if (y[i].tagName == 'P') {"
+                    + "combinedText += y[i].textContent;"
+                    + "} else if (y[i].tagName == 'OL') {"
+                    + "var z = y[i].childNodes;"
+                    + "for (var t = 0; t < z.length; t++) {"
+                    + "combinedText += z[t].textContent;"
+                    + "}"
+                    + "}"
+                    + "}combinedText;";
 
             webView.evaluateJavascript(allParagraph, new ValueCallback<String>() {
                 @Override
@@ -274,7 +286,8 @@ public class MainActivity extends AppCompatActivity {
 
                 }
             });
-            paragraphLength = "(function() { return document.getElementsByTagName('p').length; })();";
+//            paragraphLength = "(function() { return document.getElementsByTagName('p').length; })();";
+            paragraphLength = "(function() { return document.getElementsByClassName('prose').length; })();";
             webView.evaluateJavascript(paragraphLength, new ValueCallback<String>() {
                 @Override
                 public void onReceiveValue(String value) {
@@ -376,12 +389,30 @@ public class MainActivity extends AppCompatActivity {
     public void checkEnd() {
         handler.postDelayed(runnable = new Runnable() {
             public void run() {
+//                webView.post(() -> webView.evaluateJavascript(
+//                        "var paragraphs = document.getElementsByTagName('p');"
+//                                + "var combinedText='';"
+//                                + "for (var i =" + paragraphCount + "-1; i < paragraphs.length; i++) {"
+//                                + "combinedText+= paragraphs[i].textContent;"
+//                                + " }combinedText;", new ValueCallback<String>() {
+                /*  PERUBAHAN  */
+                /*  Update sebelumnya kode diatas hanya mengambil jawaban berdasarkan tag p saja, kadang
+                 * ada beberapa situasi dimana GPT memberikan list (ol) dengan dengan tag (li) tanpa diapit
+                 * tag p, sehingga list ini tidak terbaca aplikasi. Solusi dari masalah ini ada bawah  */
                 webView.post(() -> webView.evaluateJavascript(
-                        "var paragraphs = document.getElementsByTagName('p');"
-                                + "var combinedText='';"
-                                + "for (var i =" + paragraphCount + "-1; i < paragraphs.length; i++) {"
-                                + "combinedText+= paragraphs[i].textContent;"
-                                + " }combinedText;", new ValueCallback<String>() {
+                        "var x = document.getElementsByClassName('prose');"
+                                + "var y = x[" + paragraphCount + "].childNodes;"
+                                + "combinedText = '';"
+                                + "for (var i = 0; i < y.length; i++) {"
+                                + "if (y[i].tagName == 'P') {"
+                                + "combinedText += y[i].textContent;"
+                                + "} else if (y[i].tagName == 'OL') {"
+                                + "var z = y[i].childNodes;"
+                                + "for (var t = 0; t < z.length; t++) {"
+                                + "combinedText += z[t].textContent;"
+                                + "}"
+                                + "}"
+                                + "}combinedText;", new ValueCallback<String>() {
                             @Override
                             public void onReceiveValue(String value) {
                                 String paragraphString = value;
@@ -400,7 +431,7 @@ public class MainActivity extends AppCompatActivity {
     private void speak(String paragraph) {
         String paragraphLength;
         Toast.makeText(MainActivity.this, "Membacakan", Toast.LENGTH_SHORT);
-        if (paragraph == "\"\"") {
+        if (paragraph == "null") {
             try {
                 String utteranceId = UUID.randomUUID().toString();
                 textToSpeech.speak("Gagal menerima masukan, tolong ulangi pertanyaan anda.", TextToSpeech.QUEUE_FLUSH, null, utteranceId);
@@ -411,12 +442,13 @@ public class MainActivity extends AppCompatActivity {
             try {
                 String utteranceId = UUID.randomUUID().toString();
                 textToSpeech.speak(paragraph, TextToSpeech.QUEUE_FLUSH, null, utteranceId);
-
-                paragraphLength = "(function() { return document.getElementsByTagName('p').length; })();";
+                paragraphLength = "(function() { return document.getElementsByClassName('prose').length; })();";
+//            paragraphLength = "(function() { return document.getElementsByTagName('p').length; })();";
                 webView.evaluateJavascript(paragraphLength, new ValueCallback<String>() {
                     @Override
                     public void onReceiveValue(String value) {
                         paragraphCount = Integer.parseInt(value);
+
                     }
                 });
 
