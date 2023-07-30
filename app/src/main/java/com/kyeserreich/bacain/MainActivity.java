@@ -10,15 +10,17 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.net.http.SslError;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
 import android.app.ProgressDialog;
+import android.content.ActivityNotFoundException;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.CountDownTimer;
-import android.os.Debug;
 import android.os.Handler;
 import android.speech.RecognizerIntent;
 import android.speech.tts.TextToSpeech;
@@ -31,8 +33,12 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
+import android.webkit.SslErrorHandler;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -54,17 +60,22 @@ public class MainActivity extends AppCompatActivity {
     private float mAccel;
     private float mAccelCurrent;
     private float mAccelLast;
-
+    public Vibrator v = null;
     public boolean visibleState = false;
+    private boolean isIntentFinished = false;
+
+    protected static  final int RESULT_SPEECH =1;
     WebView webView;
-    String text = "Custom wee woo wee woo";
+    String text = "..";
     ProgressBar progressBar;
     ProgressDialog progressDialog;
     private ActivityResultLauncher<Intent> someActivityResultLauncher;
+
     Intent data;
     TextToSpeech textToSpeech;
     Handler handler = new Handler();
-    final int delay = 5000; // 1000 milliseconds == 1 second
+    Handler closeHandler = new Handler();
+    final int delay = 7000;
     Runnable runnable;
 
     int paragraphCount;
@@ -74,19 +85,13 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        Locale locale = new Locale("id", "ID");
-        Locale.setDefault(locale);
-        Configuration config = getBaseContext().getResources().getConfiguration();
-        config.locale = locale;
-        getBaseContext().getResources().updateConfiguration(config,
-        getBaseContext().getResources().getDisplayMetrics());
-
+        v = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         setContentView(R.layout.activity_main);
 
         mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
-        Objects.requireNonNull(mSensorManager).registerListener(mSensorListener, mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER),
+        Objects.requireNonNull(mSensorManager).registerListener(mSensorListener,
+                mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER),
                 SensorManager.SENSOR_DELAY_NORMAL);
         mAccel = 10f;
         mAccelCurrent = SensorManager.GRAVITY_EARTH;
@@ -104,8 +109,6 @@ public class MainActivity extends AppCompatActivity {
         webSettings.setUserAgentString(USER_AGENT);
         webSettings.setCacheMode(WebSettings.LOAD_DEFAULT);
         webSettings.setDomStorageEnabled(true);
-
-
         webView.setWebViewClient(new MyWebViewClient());
         webView.loadUrl("https://chat.openai.com");
 
@@ -118,6 +121,7 @@ public class MainActivity extends AppCompatActivity {
                     // There are no request codes
                     data = result.getData();
                 }
+                isIntentFinished = true;
             }
         });
         textToSpeech = new TextToSpeech(getApplicationContext(), new TextToSpeech.OnInitListener() {
@@ -165,6 +169,17 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        // Hentikan Handler jika aktivitas dihancurkan sebelum 10 detik
+        closeHandler.removeCallbacksAndMessages(null);
+    }
+
+    private void vibrate(int ms) {
+        v.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE));
+    }
+
     private final SensorEventListener mSensorListener = new SensorEventListener() {
         // Mendeteksi getaran
         @Override
@@ -176,7 +191,7 @@ public class MainActivity extends AppCompatActivity {
             mAccelCurrent = (float) Math.sqrt((double) (x * x + y * y + z * z));
             float delta = mAccelCurrent - mAccelLast;
             mAccel = mAccel * 0.9f + delta;
-            if (mAccel > 12) {
+            if (mAccel < -7) {
                 onMicPressed();
             }
         }
@@ -217,25 +232,20 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
         if (item.getItemId() == R.id.exit) {
-            if (webView.getVisibility() == View.VISIBLE) {
+            if (visibleState == true) {
+                visibleState = false;
+                webView.setVisibility(visibleState ? View.VISIBLE : View.GONE);
                 webView.setVisibility(View.GONE);
-            } else if (webView.getVisibility() == View.GONE) {
-                webView.setVisibility(View.VISIBLE);
             } else {
-                //invisible
+                visibleState = true;
+                webView.setVisibility(visibleState ? View.VISIBLE : View.GONE);
+                webView.setVisibility(View.VISIBLE);
             }
+            webView.setVisibility(visibleState ? View.VISIBLE : View.GONE);
         } else if (item.getItemId() == R.id.mic) {
             onMicPressed();
         } else if (item.getItemId() == R.id.speak) {
             onSpeakerPressed();
-        } else if (item.getItemId() == R.id.app_bar_switch) {
-            if (visibleState == true) {
-                visibleState = false;
-                Log.d("VISIBLE STATE", "False");
-            } else {
-                visibleState = true;
-                Log.d("VISIBLE STATE", "True");
-            }
         }
         return super.onOptionsItemSelected(item);
     }
@@ -280,21 +290,34 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void onMicPressed() {
-        // Menampilkan speech recognizer untuk mendapatkan pertanyaan
+        vibrate(300);
         Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, new Locale("id", "ID"));
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "id");
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "id");
+        intent.putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, "id");
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, "id");
         intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak Something");
         try {
-            someActivityResultLauncher.launch(intent);
-            webView.requestFocus();
-        } catch (Exception e) {
+//            someActivityResultLauncher.launch(intent);
+                startActivityForResult(intent, RESULT_SPEECH);
+                isIntentFinished = false;
+                webView.requestFocus();
+                new CountDownTimer(10000, 10000) {
+                    @Override
+                    public void onTick(long millisUntilFinished) {}
+                    @Override
+                    public void onFinish() {
+                        if (!isIntentFinished) {
+                            finishActivity(RESULT_SPEECH);
+                        }
+                    }
+                }.start();
+            } catch (Exception e) {
             Toast.makeText(MainActivity.this, "" + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 
     public void closeApp() {
-
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setMessage("Are you sure you want to Exit ?").setCancelable(false).setPositiveButton("Yes", new DialogInterface.OnClickListener() {
             @Override
@@ -332,12 +355,27 @@ public class MainActivity extends AppCompatActivity {
             webView.requestFocus();
 
         }
+
+        @Override
+        public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+            speak("Web gagal dimuat");
+            webView.reload();
+        }
+
+        @Override
+        public void onReceivedHttpError(
+                WebView view, WebResourceRequest request, WebResourceResponse errorResponse) {
+        }
+
+        @Override
+        public void onReceivedSslError(WebView view, SslErrorHandler handler,
+                                       SslError error) {
+        }
     }
 
     public void checkEnd() {
         handler.postDelayed(runnable = new Runnable() {
             public void run() {
-                Log.d("REPEATER", "START");
                 webView.post(() -> webView.evaluateJavascript(
                         "var paragraphs = document.getElementsByTagName('p');"
                                 + "var combinedText='';"
@@ -348,7 +386,6 @@ public class MainActivity extends AppCompatActivity {
                             public void onReceiveValue(String value) {
                                 String paragraphString = value;
                                 text = value;
-                                Log.d("REPEATER", value);
                                 if (paragraphString == text) {
                                     speak(paragraphString);
                                     handler.removeCallbacks(runnable);
@@ -393,8 +430,9 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        isIntentFinished = true;
         try {
-            String str = data.getStringArrayListExtra("android.speech.extra.RESULTS").get(0);
+            String str = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS).get(0);
             if (str.toLowerCase() == "manual aplikasi") {
                 String utteranceId = UUID.randomUUID().toString();
                 textToSpeech.speak("Untuk memulai goyangkan ponsel dan tanyakan pertanyaan. ChatGPT akan " +
@@ -408,7 +446,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
     private void pressPrompt(String str) {
-        Toast.makeText(MainActivity.this, "Width: " + webView.getWidth() + " Height: " + webView.getHeight(), Toast.LENGTH_SHORT).show();
         new CountDownTimer(1000, 1000) {
             public void onFinish() {
                 webView.setVisibility(View.VISIBLE);
@@ -465,7 +502,8 @@ public class MainActivity extends AppCompatActivity {
     private void pressButton() {
         new CountDownTimer(1000, 1000) {
             public void onFinish() {
-                webView.evaluateJavascript("(function() { document.querySelector('button.absolute').click();})();", null);
+                webView.evaluateJavascript("(function() { document.querySelector('button.absolute').click();})();",
+                        null);
                 checkEnd();
             }
 
