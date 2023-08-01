@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.SwitchCompat;
 
 import android.app.Activity;
 import android.app.AlertDialog;
@@ -24,6 +25,7 @@ import android.os.Handler;
 import android.speech.RecognizerIntent;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -62,6 +64,13 @@ public class MainActivity extends AppCompatActivity {
     public boolean visibleState = false;
     private boolean isIntentFinished = false;
     protected static  final int RESULT_SPEECH =1;
+    private String[] loginUrl = new String[] {
+            "https://chat.openai.com/auth/login",
+            "https://auth0.openai.com/u/login/",
+            "https://accounts.google.com/",
+            "https://login.live.com/",
+            "https://appleid.apple.com/"
+    };
     WebView webView;
     String text = "..";
     ProgressBar progressBar;
@@ -75,7 +84,8 @@ public class MainActivity extends AppCompatActivity {
     Runnable runnable;
     int paragraphCount;
     public String USER_AGENT = "(Android " + Build.VERSION.RELEASE + ") Chrome/110.0.5481.63 Mobile";
-
+    private SwitchCompat toggleSwitch;
+    private boolean switchState = false; // Untuk menyimpan status on/off
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -220,7 +230,6 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.toolbar_menu, menu);
-
         return super.onCreateOptionsMenu(menu);
     }
 
@@ -228,20 +237,23 @@ public class MainActivity extends AppCompatActivity {
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
         if (item.getItemId() == R.id.exit) {
             if (visibleState == true) {
+                item.setIcon(R.drawable.baseline_visibility_off_24);
                 visibleState = false;
                 webView.setVisibility(visibleState ? View.VISIBLE : View.GONE);
                 webView.setVisibility(View.GONE);
             } else {
+                item.setIcon(R.drawable.baseline_visibility_24);
                 visibleState = true;
                 webView.setVisibility(visibleState ? View.VISIBLE : View.GONE);
                 webView.setVisibility(View.VISIBLE);
             }
             webView.setVisibility(visibleState ? View.VISIBLE : View.GONE);
-        } else if (item.getItemId() == R.id.mic) {
-            onMicPressed();
-        } else if (item.getItemId() == R.id.speak) {
-            onSpeakerPressed();
         }
+//        else if (item.getItemId() == R.id.mic) {
+//            onMicPressed();
+//        } else if (item.getItemId() == R.id.speak) {
+//            onSpeakerPressed();
+//        }
         return super.onOptionsItemSelected(item);
     }
 
@@ -262,18 +274,7 @@ public class MainActivity extends AppCompatActivity {
             * diapit tag p, sehingga list ini tidak terbaca aplikasi. Solusi dari masalah ini ada bawah  */
             allParagraph =
                     "var x = document.getElementsByClassName('prose');"
-                    + "var y = x[" + paragraphCount + "].childNodes;"
-                    + "combinedText = '';"
-                    + "for (var i = 0; i < y.length; i++) {"
-                    + "if (y[i].tagName == 'P') {"
-                    + "combinedText += y[i].textContent;"
-                    + "} else if (y[i].tagName == 'OL') {"
-                    + "var z = y[i].childNodes;"
-                    + "for (var t = 0; t < z.length; t++) {"
-                    + "combinedText += z[t].textContent;"
-                    + "}"
-                    + "}"
-                    + "}combinedText;";
+                            + "x[" + paragraphCount + "].textContent;";
 
             webView.evaluateJavascript(allParagraph, new ValueCallback<String>() {
                 @Override
@@ -363,8 +364,33 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onPageFinished(WebView view, String url) {
             super.onPageFinished(view, url);
+            Log.d("URL", view.getUrl());
             progressBar.setVisibility(View.GONE);
-            webView.setVisibility(visibleState ? View.VISIBLE : View.GONE);
+            webView.setVisibility(View.VISIBLE);
+            boolean isFound = false;
+            for (String uri : loginUrl) {
+                if (view.getUrl().indexOf(uri) !=-1) {
+                    if(uri == loginUrl[0]) {
+                        speak("Silakan login terlebih dahulu");
+                    }
+                    isFound = true;
+                    break;
+                } //true
+            }
+            if (view.getUrl().indexOf("https://chat.openai.com/") !=-1) {
+                new CountDownTimer(1000, 1000) {
+                    public void onFinish() {
+                        webView.setVisibility(visibleState ? View.VISIBLE : View.GONE);
+                    }
+
+                    public void onTick(long millisUntilFinished) {}
+                }.start();
+            } else {
+                webView.setVisibility(visibleState ? View.VISIBLE : View.GONE);
+            }
+            if (isFound) {
+                webView.setVisibility(View.VISIBLE);
+            }
             webView.requestFocus();
 
         }
@@ -399,20 +425,23 @@ public class MainActivity extends AppCompatActivity {
                 /*  Update sebelumnya kode diatas hanya mengambil jawaban berdasarkan tag p saja, kadang
                  * ada beberapa situasi dimana GPT memberikan list (ol) dengan dengan tag (li) tanpa diapit
                  * tag p, sehingga list ini tidak terbaca aplikasi. Solusi dari masalah ini ada bawah  */
+//                webView.post(() -> webView.evaluateJavascript(
+//                        "var x = document.getElementsByClassName('prose');"
+//                                + "var y = x[" + paragraphCount + "].childNodes;"
+//                                + "combinedText = '';"
+//                                + "for (var i = 0; i < y.length; i++) {"
+//                                + "if (y[i].tagName == 'P') {"
+//                                + "combinedText += y[i].textContent;"
+//                                + "} else if (y[i].tagName == 'OL') {"
+//                                + "var z = y[i].childNodes;"
+//                                + "for (var t = 0; t < z.length; t++) {"
+//                                + "combinedText += z[t].textContent;"
+//                                + "}"
+//                                + "}"
+//                                + "}combinedText;", new ValueCallback<String>() {
                 webView.post(() -> webView.evaluateJavascript(
                         "var x = document.getElementsByClassName('prose');"
-                                + "var y = x[" + paragraphCount + "].childNodes;"
-                                + "combinedText = '';"
-                                + "for (var i = 0; i < y.length; i++) {"
-                                + "if (y[i].tagName == 'P') {"
-                                + "combinedText += y[i].textContent;"
-                                + "} else if (y[i].tagName == 'OL') {"
-                                + "var z = y[i].childNodes;"
-                                + "for (var t = 0; t < z.length; t++) {"
-                                + "combinedText += z[t].textContent;"
-                                + "}"
-                                + "}"
-                                + "}combinedText;", new ValueCallback<String>() {
+                                + "x[" + paragraphCount + "].textContent;", new ValueCallback<String>() {
                             @Override
                             public void onReceiveValue(String value) {
                                 String paragraphString = value;
