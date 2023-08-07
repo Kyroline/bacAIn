@@ -44,6 +44,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.ProgressBar;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import java.util.Locale;
@@ -75,6 +76,7 @@ public class MainActivity extends AppCompatActivity {
     WebView webView;
     String text = "";
     ProgressBar progressBar;
+    TextView labelKata, labelKarakter, labelTime;
     ProgressDialog progressDialog;
     private ActivityResultLauncher<Intent> someActivityResultLauncher;
     Intent data;
@@ -105,6 +107,9 @@ public class MainActivity extends AppCompatActivity {
         mAccelLast = SensorManager.GRAVITY_EARTH;
 
         webView = findViewById(R.id.webview);
+        labelKata = findViewById(R.id.labelKata);
+        labelKarakter = findViewById(R.id.labelKarakter);
+        labelTime = findViewById(R.id.labelTime);
         progressBar = findViewById(R.id.progressBar);
 
         progressDialog = new ProgressDialog(this);
@@ -465,6 +470,9 @@ public class MainActivity extends AppCompatActivity {
                                     handler.removeCallbacks(runnable);
                                     MainActivity.this.runOnUiThread(new Runnable() {
                                         public void run() {
+                                            labelTime.setText("Time Elapsed : " + timeElapsed / 1000 + " s");
+                                            labelKata.setText("Kata : "+ splited.length);
+                                            labelKarakter.setText("Karakter : " + text.length());
                                             Toast.makeText(MainActivity.this, "Time Elapsed: " + timeElapsed / 1000 + " s\nJumlah kata: " + splited.length + "\nJumlah karakter: " + text.length(), Toast.LENGTH_LONG).show();
                                         }
                                     });
