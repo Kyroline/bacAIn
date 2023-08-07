@@ -76,7 +76,7 @@ public class MainActivity extends AppCompatActivity {
     WebView webView;
     String text = "";
     ProgressBar progressBar;
-    TextView labelKata, labelKarakter, labelTime;
+    //TextView labelKata, labelKarakter, labelTime; //Uncomment for Debug
     ProgressDialog progressDialog;
     private ActivityResultLauncher<Intent> someActivityResultLauncher;
     Intent data;
@@ -107,9 +107,11 @@ public class MainActivity extends AppCompatActivity {
         mAccelLast = SensorManager.GRAVITY_EARTH;
 
         webView = findViewById(R.id.webview);
+        /*Uncomment for Debug
         labelKata = findViewById(R.id.labelKata);
         labelKarakter = findViewById(R.id.labelKarakter);
         labelTime = findViewById(R.id.labelTime);
+         */
         progressBar = findViewById(R.id.progressBar);
 
         progressDialog = new ProgressDialog(this);
@@ -470,14 +472,15 @@ public class MainActivity extends AppCompatActivity {
                                     String[] splited = text.split("\\s+");
                                     speak(paragraphString);
                                     handler.removeCallbacks(runnable);
+                                    /*Uncomment for Debug
                                     MainActivity.this.runOnUiThread(new Runnable() {
                                         public void run() {
                                             labelTime.setText("Time Elapsed : " + timeElapsed / 1000 + " s");
                                             labelKata.setText("Kata : "+ splited.length);
                                             labelKarakter.setText("Karakter : " + text.length());
-//                                            Toast.makeText(MainActivity.this, "Time Elapsed: " + timeElapsed / 1000 + " s\nJumlah kata: " + splited.length + "\nJumlah karakter: " + text.length(), Toast.LENGTH_LONG).show();
+                                            Toast.makeText(MainActivity.this, "Time Elapsed: " + timeElapsed / 1000 + " s\nJumlah kata: " + splited.length + "\nJumlah karakter: " + text.length(), Toast.LENGTH_LONG).show();
                                         }
-                                    });
+                                    });*/
                                 }
                             }
                         }));
