@@ -12,6 +12,7 @@ import androidx.appcompat.widget.SwitchCompat;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.net.http.SslError;
+import android.os.SystemClock;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.app.ProgressDialog;
@@ -72,15 +73,16 @@ public class MainActivity extends AppCompatActivity {
             "https://appleid.apple.com/"
     };
     WebView webView;
-    String text = "..";
+    String text = "";
     ProgressBar progressBar;
     ProgressDialog progressDialog;
     private ActivityResultLauncher<Intent> someActivityResultLauncher;
     Intent data;
     TextToSpeech textToSpeech;
+    long startTime;
     Handler handler = new Handler();
     Handler closeHandler = new Handler();
-    final int delay = 7000;
+    final int delay = 3000;
     Runnable runnable;
     int paragraphCount;
     public String USER_AGENT = "(Android " + Build.VERSION.RELEASE + ") Chrome/110.0.5481.63 Mobile";
@@ -304,13 +306,17 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void onMicPressed() {
-        vibrate(300);
+        vibrate(100);
         Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "id");
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "id");
         intent.putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, "id");
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, "id");
-        intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak Something");
+        intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "");
+        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2000);
+        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2000);
+        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 3000);
+
         try {
 //            someActivityResultLauncher.launch(intent);
                 startActivityForResult(intent, RESULT_SPEECH);
@@ -368,16 +374,8 @@ public class MainActivity extends AppCompatActivity {
             progressBar.setVisibility(View.GONE);
             webView.setVisibility(View.VISIBLE);
             boolean isFound = false;
-            for (String uri : loginUrl) {
-                if (view.getUrl().indexOf(uri) !=-1) {
-                    if(uri == loginUrl[0]) {
-                        speak("Silakan login terlebih dahulu");
-                    }
-                    isFound = true;
-                    break;
-                } //true
-            }
-            if (view.getUrl().indexOf("https://chat.openai.com/") !=-1) {
+            if (view.getUrl().indexOf("https://chat.openai.com/") !=-1 && (view.getUrl().indexOf("login" +
+                    "") == -1)) {
                 new CountDownTimer(1000, 1000) {
                     public void onFinish() {
                         webView.setVisibility(visibleState ? View.VISIBLE : View.GONE);
@@ -387,6 +385,17 @@ public class MainActivity extends AppCompatActivity {
                 }.start();
             } else {
                 webView.setVisibility(visibleState ? View.VISIBLE : View.GONE);
+            }
+            for (String uri : loginUrl) {
+                if (view.getUrl().indexOf(uri) !=-1) {
+                    if(uri == loginUrl[0]) {
+                        speak("Silakan login terlebih dahulu");
+                        Log.d("URI", uri);
+                    }
+                    Log.d("URI", "URI Pada : " + uri);
+                    isFound = true;
+                    break;
+                } //true
             }
             if (isFound) {
                 webView.setVisibility(View.VISIBLE);
@@ -445,10 +454,20 @@ public class MainActivity extends AppCompatActivity {
                             @Override
                             public void onReceiveValue(String value) {
                                 String paragraphString = value;
-                                text = value;
-                                if (paragraphString == text) {
+                                if (paragraphString.length() != text.length()) {
+                                    Log.d("Current", paragraphString);
+                                    Log.d("Previous", text);
+                                    text = paragraphString;
+                                } else {
+                                    long timeElapsed = System.currentTimeMillis() - startTime;
+                                    String[] splited = text.split("\\s+");
                                     speak(paragraphString);
                                     handler.removeCallbacks(runnable);
+                                    MainActivity.this.runOnUiThread(new Runnable() {
+                                        public void run() {
+                                            Toast.makeText(MainActivity.this, "Time Elapsed: " + timeElapsed / 1000 + " s\nJumlah kata: " + splited.length + "\nJumlah karakter: " + text.length(), Toast.LENGTH_LONG).show();
+                                        }
+                                    });
                                 }
                             }
                         }));
@@ -493,6 +512,7 @@ public class MainActivity extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, data);
         isIntentFinished = true;
         try {
+            startTime = System.currentTimeMillis();
             String str = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS).get(0);
             if (str.toLowerCase() == "manual aplikasi") {
                 String utteranceId = UUID.randomUUID().toString();
