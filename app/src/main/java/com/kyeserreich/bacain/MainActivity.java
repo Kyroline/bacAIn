@@ -84,7 +84,7 @@ public class MainActivity extends AppCompatActivity {
     long startTime;
     Handler handler = new Handler();
     Handler closeHandler = new Handler();
-    final int delay = 3000;
+    final int delay = 2000;
     Runnable runnable;
     int paragraphCount;
     public String USER_AGENT = "(Android " + Build.VERSION.RELEASE + ") Chrome/110.0.5481.63 Mobile";
@@ -381,7 +381,7 @@ public class MainActivity extends AppCompatActivity {
             boolean isFound = false;
             if (view.getUrl().indexOf("https://chat.openai.com/") !=-1 && (view.getUrl().indexOf("login" +
                     "") == -1)) {
-                new CountDownTimer(1000, 1000) {
+                new CountDownTimer(100, 100) {
                     public void onFinish() {
                         webView.setVisibility(visibleState ? View.VISIBLE : View.GONE);
                     }
@@ -463,7 +463,9 @@ public class MainActivity extends AppCompatActivity {
                                     Log.d("Current", paragraphString);
                                     Log.d("Previous", text);
                                     text = paragraphString;
-                                } else {
+                                } else if (paragraphString.length() == 0) {
+                                }
+                                else {
                                     long timeElapsed = System.currentTimeMillis() - startTime;
                                     String[] splited = text.split("\\s+");
                                     speak(paragraphString);
@@ -473,7 +475,7 @@ public class MainActivity extends AppCompatActivity {
                                             labelTime.setText("Time Elapsed : " + timeElapsed / 1000 + " s");
                                             labelKata.setText("Kata : "+ splited.length);
                                             labelKarakter.setText("Karakter : " + text.length());
-                                            Toast.makeText(MainActivity.this, "Time Elapsed: " + timeElapsed / 1000 + " s\nJumlah kata: " + splited.length + "\nJumlah karakter: " + text.length(), Toast.LENGTH_LONG).show();
+//                                            Toast.makeText(MainActivity.this, "Time Elapsed: " + timeElapsed / 1000 + " s\nJumlah kata: " + splited.length + "\nJumlah karakter: " + text.length(), Toast.LENGTH_LONG).show();
                                         }
                                     });
                                 }
@@ -535,7 +537,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
     private void pressPrompt(String str) {
-        new CountDownTimer(1000, 1000) {
+        new CountDownTimer(100, 100) {
             public void onFinish() {
                 webView.setVisibility(View.VISIBLE);
                 long downTime = 900;
@@ -567,7 +569,7 @@ public class MainActivity extends AppCompatActivity {
         }.start();
     }
     private void refreshButton(String str) {
-        new CountDownTimer(1000, 1000) {
+        new CountDownTimer(100, 100) {
             public void onFinish() {
                 webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE));
                 InputMethodManager imm = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
@@ -589,7 +591,7 @@ public class MainActivity extends AppCompatActivity {
         }.start();
     }
     private void pressButton() {
-        new CountDownTimer(1000, 1000) {
+        new CountDownTimer(100, 100) {
             public void onFinish() {
                 webView.evaluateJavascript("(function() { document.querySelector('button.absolute').click();})();",
                         null);
